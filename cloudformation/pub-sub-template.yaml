@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  PubSubTestUserPool:
+    Type: 'AWS::Cognito::UserPool'
+    Properties:
+      UserPoolName: pub-sub-test-pool
+      AutoVerifiedAttributes:
+        - email
+  PubSubTestUserPoolClient:
+    Type: 'AWS::Cognito::UserPoolClient'
+    Properties:
+      ClientName: PubSubTest
+      UserPoolId: !Ref PubSubTestUserPool
+      GenerateSecret: false
+      RefreshTokenValidity: 3650
+    DependsOn:
+      - PubSubTestUserPool
+  PubSubTestIdentityPool:
+    Type: 'AWS::Cognito::IdentityPool'
+    Properties:
+      IdentityPoolName: PubSubTest
+      CognitoIdentityProviders: 
+        - ClientId: !Ref PubSubTestUserPoolClient
+          ProviderName: !GetAtt
+            - PubSubTestUserPool
+            - ProviderName
+      AllowUnauthenticatedIdentities: true
+    DependsOn:
+      - PubSubTestUserPoolClient
+  PubSubTestAuthRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                'cognito-identity.amazonaws.com:aud': !Ref PubSubTestIdentityPool
+              'ForAnyValue:StringLike':
+                'cognito-identity.amazonaws.com:amr': authenticated
+      Policies:
+        - PolicyName: pub-sub-test-auth-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'iot:Connect'
+                  - 'iot:Publish'
+                  - 'iot:Subscribe'
+                  - 'iot:Receive'
+                Resource:
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - 'mobileanalytics:PutEvents'
+                  - 'cognito-sync:*'
+                  - 'cognito-identity:*'
+                Resource:
+                  - '*'
+  PubSubTestUnauthRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                'cognito-identity.amazonaws.com:aud': !Ref PubSubTestIdentityPool
+              'ForAnyValue:StringLike':
+                'cognito-identity.amazonaws.com:amr': unauthenticated
+      Policies:
+        - PolicyName: pub-sub-test-auth-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'iot:Connect'
+                  - 'iot:Publish'
+                  - 'iot:Subscribe'
+                  - 'iot:Receive'
+                Resource:
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - 'mobileanalytics:PutEvents'
+                  - 'cognito-sync:*'
+                  - 'cognito-identity:*'
+                Resource:
+                  - '*'
+    DependsOn:
+      - PubSubTestIdentityPool
+  PubSubTestIdentityPoolRoleAttatchment:
+    Type: 'AWS::Cognito::IdentityPoolRoleAttachment'
+    Properties:
+      IdentityPoolId: !Ref PubSubTestIdentityPool
+      Roles:
+        authenticated: !GetAtt
+          - PubSubTestAuthRole
+          - Arn
+        unauthenticated: !GetAtt
+          - PubSubTestUnauthRole
+          - Arn
+    DependsOn:
+      - PubSubTestIdentityPool
+  PubSubTestIoTPolicy:
+    Type: 'AWS::IoT::Policy'
+    Properties: 
+      PolicyName: 'PubSubTestPolicy'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'iot:*'
+            Resource:
+              - '*'
+  PubSubTestPolicyPrincipalAttachment:
+    Type: AWS::IoT::PolicyPrincipalAttachment
+    Properties: 
+      PolicyName: !Ref PubSubTestIoTPolicy
+      Principal: !Ref PubSubTestIdentityPool
+    DependsOn:
+      - PubSubTestIoTPolicy
+      
+  
+
+Parameters: {}
